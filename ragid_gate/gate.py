@@ -15,6 +15,26 @@ class GateResult:
     reason: str
     timestamp: int
 
+def check_rate_limit(
+    agent_id: str,
+    get_attempts: Callable,
+    increment_attempts: Callable,
+    max_attempts: int = 10,
+    window_seconds: int = 60
+) -> bool:
+    """
+    Returns True if agent is within rate limit.
+    Returns False if agent has exceeded max_attempts within the window and should be denied.
+    """
+    current = get_attempts(agent_id)
+    if current is None:
+        increment_attempts(agent_id, window_seconds)
+        return True
+    if int(current) >= max_attemps:
+        return False
+    increment_attempts(agent_id, window_seconds)
+    return True
+
 def _external_deny(agent_id: str, requested_gate: str, timestamp: int) -> GateResult:
     return GateResult(GateDecision.DENY, agent_id, requested_gate, "unauthorized", timestamp)
 
@@ -25,9 +45,17 @@ def hard_gate(
     verify_scope_sig: Callable
     commit_to_trail: Callable
     check_and_store_nonce: Callable
+    get_attempts: Callable,
+    increment_attempts: Callable
 ) -> GateResult:
 
     timestamp = int(time.time())
+
+    # Rate limit check
+    if not check_rate_limit(claim.agent_id, get_attempts, increment_attempts):
+        result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "rate_limited", timestamp)
+        commit_to_trail(result)
+        return _external_deny(claim.agent_id, requested_gate, timestamp)
 
     # Factor 1 - Keypair authenticity
     if not verify_keypair(claim.agent_id, claim.keypair_sig):
