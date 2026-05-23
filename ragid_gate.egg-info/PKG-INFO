@@ -1,0 +1,5 @@
+Metadata-Version: 2.1
+Name: ragid-gate
+Version: 0.1.0
+Summary: Shared hard gate enforcement for RealAgentID, TrailStax, and Ira-Digital-Blueprints
+Requires-Python: >=3.8
