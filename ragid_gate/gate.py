@@ -21,6 +21,7 @@ def hard_gate(
     verify_keypair: Callable
     verify_scope_sig: Callable
     commit_to_trail: Callable
+    check_and_store_nonce: Callable
 ) -> GateResult:
 
     timestamp = int(time.time())
@@ -29,7 +30,7 @@ def hard_gate(
     if not verify_keypair(claim.agent_id, claim.keypair_sig):
         result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "keypair_invalid", timestamp)
         commit_to_trail(result)
-        return ressult
+        return result
 
     # TTL check
     if claim.is_expired():
@@ -38,6 +39,12 @@ def hard_gate(
     # Factor 2 - Scope-gate binding
     if not verify_scope_sig(claim):
         result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "scope_sig_invalid", timestamp)
+        commit_to_trail(result)
+        return result
+
+    # Nonce check - replay attack prevention
+    if not check_and_store_nonce(claim.nonce):
+        result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "nonce_replayed", timestamp)
         commit_to_trail(result)
         return result
 

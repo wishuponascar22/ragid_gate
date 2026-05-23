@@ -15,6 +15,7 @@ class ScopeClaim:
     permitted_gates: List[str]
     denied_gates: List[str]
     scope_sig: str
+    nonce: str
     trail_entry_required: bool = True
 
     def is_expired(self) -> bool:
