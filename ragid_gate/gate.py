@@ -15,6 +15,18 @@ class GateResult:
     reason: str
     timestamp: int
 
+def check_clock_skew(
+    issued_at: int,
+    max_skew_seconds: int = 30
+) -> bool:
+    """
+    Returns True if issued_at is within acceptable skew window of server time.
+    Returns False if timestamp is too far in the past or future - indicates clock manipulation.
+    """
+    server_time = int(time.time())
+    skew = abs(server_time - issued_at)
+    return skew <= max_skew_seconds
+
 def check_rate_limit(
     agent_id: str,
     get_attempts: Callable,
@@ -30,10 +42,11 @@ def check_rate_limit(
     if current is None:
         increment_attempts(agent_id, window_seconds)
         return True
-    if int(current) >= max_attemps:
+    if int(current) >= max_attempts:
         return False
     increment_attempts(agent_id, window_seconds)
     return True
+
 
 def _external_deny(agent_id: str, requested_gate: str, timestamp: int) -> GateResult:
     return GateResult(GateDecision.DENY, agent_id, requested_gate, "unauthorized", timestamp)
@@ -47,6 +60,7 @@ def hard_gate(
     check_and_store_nonce: Callable
     get_attempts: Callable,
     increment_attempts: Callable
+    max_skew_seconds: int = 30
 ) -> GateResult:
 
     timestamp = int(time.time())
@@ -54,6 +68,12 @@ def hard_gate(
     # Rate limit check
     if not check_rate_limit(claim.agent_id, get_attempts, increment_attempts):
         result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "rate_limited", timestamp)
+        commit_to_trail(result)
+        return _external_deny(claim.agent_id, requested_gate, timestamp)
+
+    # Clock skew check
+    if not check_clock_skew(claim.issued_at, max_skew_seconds):
+        result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "clock_skew_detected", timestamp)
         commit_to_trail(result)
         return _external_deny(claim.agent_id, requested_gate, timestamp)
 
