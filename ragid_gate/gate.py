@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Callable
 import time
 from ragid_gate.schema import ScopeClaim
+from core.lineage import verify_lineage
 
 class GateDecision:
     PASS = "PASS"
@@ -98,6 +99,12 @@ def hard_gate(
     # Nonce check - replay attack prevention
     if not check_and_store_nonce(claim.nonce):
         result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "nonce_replayed", timestamp)
+        commit_to_trail(result)
+        return _external_deny(claim.agent_id, requested_gate, timestamp)
+
+    # Factor 3 - Lineage verification
+    if not verify_lineage(claim.agent_id):
+        result = GateResult(GateDecision.DENY, claim.agent_id, requested_gate, "lineage_invalid", timestamp)
         commit_to_trail(result)
         return _external_deny(claim.agent_id, requested_gate, timestamp)
 
